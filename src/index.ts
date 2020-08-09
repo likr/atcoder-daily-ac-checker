@@ -34,8 +34,30 @@ interface Problem {
   title: string;
 }
 
+interface ProblemDifficulty {
+  slope: number;
+  intercept: number;
+  variance: number;
+  difficulty: number;
+  discrimination: number;
+  irt_loglikelihood: number;
+  irt_users: number;
+  is_experimental: boolean;
+}
+
 function getAtcoderProblems(): Problem[] {
   const url = "https://kenkoooo.com/atcoder/resources/problems.json";
+  const response = UrlFetchApp.fetch(url, {
+    method: "get",
+    contentType: "application/json",
+    muteHttpExceptions: true,
+  });
+
+  return JSON.parse(response.getContentText());
+}
+
+function getAtcoderProblemDifficulty(): { string: Problem } {
+  const url = "https://kenkoooo.com/atcoder/resources/problem-models.json";
   const response = UrlFetchApp.fetch(url, {
     method: "get",
     contentType: "application/json",
@@ -87,6 +109,7 @@ function postMessage(messages: string | string[]): void {
 
 function getMotivatedUsers(atcoderIds: string[], targetDate: string): MotivatedUser[] {
   const atcoderProblems = getAtcoderProblems();
+  const difficulties = getAtcoderProblemDifficulty();
   const result: MotivatedUser[] = [];
 
   atcoderIds.forEach((atcoderId) => {
@@ -128,6 +151,7 @@ function getMotivatedUsers(atcoderIds: string[], targetDate: string): MotivatedU
           problem_id: submission.problem_id,
           contest_id: submission.contest_id,
           title: problem.title,
+          difficulty: Math.max(0, difficulties[submission.problem_id].difficulty || 0).toFixed(0),
         });
       }
     });
@@ -243,46 +267,37 @@ function main(): void {
   const moreMotivatedUsers: MoreMotivatedUser[] = getMoreMotivatedUsers(atcoderIds);
 
   if (motivatedUsers.length) {
-    const messages = [];
-
-    messages.push(
-      `*${targetDate}* にACした人を紹介するよ！（通知設定は<https://docs.google.com/spreadsheets/d/${sheetId}/|こちら>）`
-    );
-
-    motivatedUsers.forEach((motivatedUser: MotivatedUser) => {
-      if (motivatedUser.submissions.length === 0) return;
-
-      const tmpMessages = [];
-      tmpMessages.push(`*${motivatedUser.atcoderId}*`);
-      tmpMessages.push(
-        ...motivatedUser.submissions.map((submission) => {
-          return `- <https://atcoder.jp/contests/${submission.contest_id}/tasks/${submission.problem_id}|${submission.title}> | <https://atcoder.jp/contests/${submission.contest_id}/submissions/${submission.id}|提出コード>`;
-        })
-      );
-
-      messages.push(tmpMessages.join("\n"));
-    });
-
-    messages.push("やってる！最高！引き続きやっていきましょう:fire:");
-
-    postMessage(messages);
+    postMessage([
+      `*${targetDate}* にACした人を紹介するよ！（通知設定は<https://docs.google.com/spreadsheets/d/${sheetId}/|こちら>）`,
+    ]);
+    for (const motivatedUser of motivatedUsers) {
+      const submissions = [];
+      const perPost = 10;
+      for (let i = 0; i < motivatedUser.submissions.length / perPost; ++i) {
+        submissions.push([]);
+      }
+      motivatedUser.submissions.forEach((submission, i) => {
+        submissions[Math.floor(i / perPost)].push(submission);
+      });
+      submissions.forEach((items, i) => {
+        const messages = [];
+        messages.push(`*${motivatedUser.atcoderId}(${i + 1}/${submissions.length})*`);
+        for (const submission of items) {
+          messages.push(
+            `- <https://atcoder.jp/contests/${submission.contest_id}/tasks/${submission.problem_id}|${submission.title} (Diff:${submission.difficulty})> | <https://atcoder.jp/contests/${submission.contest_id}/submissions/${submission.id}|提出コード>`
+          );
+        }
+        postMessage(messages);
+      });
+    }
+    postMessage(["やってる！最高！引き続きやっていきましょう:fire:"]);
   }
 
-  if (moreMotivatedUsers.length) {
+  for (const moreMotivatedUser of moreMotivatedUsers) {
     const messages = [];
-
     messages.push("*今* 勢いのある人を紹介するよ！");
-
-    messages.push(
-      moreMotivatedUsers
-        .map((moreMotivatedUser) => {
-          return `*${moreMotivatedUser.atcoderId}* ㊗️ *${moreMotivatedUser.targetAcceptedCount}* AC達成 👏`;
-        })
-        .join("\n")
-    );
-
+    messages.push(`*${moreMotivatedUser.atcoderId}* ㊗️ *${moreMotivatedUser.targetAcceptedCount}* AC達成 👏`);
     messages.push("めっちゃやってる！やばいね？最＆高！");
-
     postMessage(messages);
   }
 }
