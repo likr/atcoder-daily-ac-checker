@@ -151,7 +151,7 @@ function getMotivatedUsers(atcoderIds: string[], targetDate: string): MotivatedU
           problem_id: submission.problem_id,
           contest_id: submission.contest_id,
           title: problem.title,
-          difficulty: Math.max(0, difficulties[submission.problem_id].difficulty || 0).toFixed(0),
+          difficulty: Math.max(0, difficulties[submission.problem_id]?.difficulty ?? 0).toFixed(0),
         });
       }
     });
